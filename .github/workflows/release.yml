@@ -1,0 +1,49 @@
+# Publishes the crate to crates.io when a `v*` tag is pushed. It verifies the same things as ci.yml
+# first, and checks that the tag names the version in Cargo.toml. Needs the repository secret
+# CARGO_REGISTRY_TOKEN (a crates.io token that may publish this crate). `elbert-subsonic-core` must
+# be on crates.io first: the `git` part of the dependency is dropped from the published manifest and
+# the `version` is what crates.io resolves.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  verify:
+    name: verify
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  publish:
+    name: publish
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install --profile minimal # reads rust-toolchain.toml
+      - name: The tag must name the version in Cargo.toml
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          if [ "$TAG" != "v$version" ]; then
+            echo "error: tag $TAG does not match Cargo.toml version $version" >&2
+            exit 1
+          fi
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish

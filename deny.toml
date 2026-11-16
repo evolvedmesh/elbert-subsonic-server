@@ -1,0 +1,32 @@
+# cargo-deny policy (run `cargo deny check`). Same policy as the Elbert service monorepo.
+
+[graph]
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
+
+[advisories]
+# Fail on any RustSec advisory; yanked crates are errors too.
+yanked = "deny"
+# quick-xml 0.37 parses podcast feeds (`podcasts` feature). Both advisories are denial of service
+# by a hostile feed that the user subscribed to; the fix (quick-xml >= 0.41) changes how entities
+# reach the parser (`Event::GeneralRef`), so it is a port of `parse_feed`, not part of the extraction
+# from Elbert. Remove these ignores with that port.
+ignore = ["RUSTSEC-2026-0194", "RUSTSEC-2026-0195"]
+
+[licenses]
+# The crate is published under MIT, so only permissive licences are allowed. MPL-2.0 is symphonia
+# (the `transcode` feature): file-level copyleft, which does not reach this crate's own code.
+allow = ["MIT", "Apache-2.0", "Unicode-3.0", "BSD-3-Clause", "ISC", "MPL-2.0", "CDLA-Permissive-2.0"]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# rustls only: the library never links OpenSSL.
+deny = [{ crate = "openssl" }, { crate = "openssl-sys" }, { crate = "native-tls" }]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# The core crate, until it is published to crates.io.
+allow-git = ["https://github.com/evolvedmesh/elbert-subsonic-core"]

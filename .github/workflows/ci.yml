@@ -1,0 +1,66 @@
+# Continuous integration: formatting, clippy with warnings as errors, tests (all features, none, and
+# each feature alone), cargo-deny.
+# The actions are pinned to commit SHAs, and every job asks for the permissions it needs.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: rust
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install --profile minimal # reads rust-toolchain.toml
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Clippy (warnings are errors)
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Test
+        run: cargo test
+      - name: Every feature combination (none, and each alone)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo clippy --all-targets --no-default-features -- -D warnings
+          cargo test --no-default-features
+          for feature in transcode podcasts hls; do
+            cargo clippy --all-targets --no-default-features --features "$feature" -- -D warnings
+            cargo test --no-default-features --features "$feature"
+          done
+      - name: Install cargo-deny (pinned release, checksum verified)
+        env:
+          DENY_VERSION: 0.20.2
+          DENY_SHA256: 9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f
+        run: |
+          asset="cargo-deny-${DENY_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          curl --proto '=https' --tlsv1.2 -fsSL -o "$RUNNER_TEMP/$asset" \
+            "https://github.com/EmbarkStudios/cargo-deny/releases/download/${DENY_VERSION}/${asset}"
+          echo "${DENY_SHA256}  $RUNNER_TEMP/$asset" | sha256sum -c -
+          mkdir "$RUNNER_TEMP/deny"
+          tar -xzf "$RUNNER_TEMP/$asset" -C "$RUNNER_TEMP/deny" --strip-components=1
+          echo "$RUNNER_TEMP/deny" >> "$GITHUB_PATH"
+      - name: cargo-deny
+        run: cargo-deny check advisories bans licenses sources

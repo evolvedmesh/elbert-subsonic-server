@@ -1,0 +1,69 @@
+[package]
+name = "elbert-subsonic-server"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+description = "The hyper HTTP host for elbert-subsonic-core: the Subsonic and OpenSubsonic API on a socket, with media, optional transcoding, podcasts and HLS."
+license = "MIT"
+repository = "https://github.com/evolvedmesh/elbert-subsonic-server"
+homepage = "https://github.com/evolvedmesh/elbert-subsonic-server"
+readme = "README.md"
+keywords = ["subsonic", "opensubsonic", "music", "hyper", "elbert"]
+categories = ["multimedia::audio", "web-programming::http-server"]
+exclude = [".github/", ".cargo/", "deny.toml", "rust-toolchain.toml"]
+
+[features]
+default = ["transcode", "podcasts", "hls"]
+# Decoding, the MP3 and Opus encoders and the resampler: `stream` with a format, a bit-rate
+# limit or an offset, and the `transcoding` and `transcodeOffset` extensions.
+transcode = ["dep:symphonia", "dep:rusty-opus", "dep:rusty_mp3", "dep:getrandom"]
+# The feed client and parser: the podcast calls and the `getPodcastEpisode` extension.
+podcasts = [
+  "dep:hyper-rustls",
+  "dep:rustls",
+  "dep:rustls-native-certs",
+  "dep:rustls-pki-types",
+  "dep:webpki-roots",
+  "dep:quick-xml",
+  "dep:sha1",
+  "hyper/client",
+  "hyper-util/client-legacy",
+]
+# `hls.m3u8`.
+hls = []
+
+[dependencies]
+# Core is not on crates.io yet: consumers resolve it by git until 0.1.0 is published, and
+# `cargo publish` uses the `version` (see README, "Local development").
+elbert-subsonic-core = { git = "https://github.com/evolvedmesh/elbert-subsonic-core", version = "0.1" }
+tokio = { version = "1", default-features = false, features = ["rt", "net", "time", "sync", "fs", "io-util", "macros"] }
+hyper = { version = "1", default-features = false, features = ["http1", "server"] }
+hyper-util = { version = "0.1", default-features = false, features = ["tokio", "http1"] }
+http-body-util = "0.1"
+bytes = "1"
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+serde_json = "1"
+
+# `transcode`: decoders for the formats a music library holds (pure Rust), and the encoders.
+symphonia = { version = "0.5.4", optional = true, default-features = false, features = [
+  "aac", "alac", "flac", "mp3", "pcm", "vorbis",
+  "isomp4", "ogg", "wav", "aiff", "caf",
+] }
+rusty-opus = { version = "1", optional = true }
+rusty_mp3 = { version = "1", optional = true }
+getrandom = { version = "0.3", optional = true }
+
+# `podcasts`: hyper over rustls (ring, no OpenSSL) and the feed parser (quick-xml 0.37: see the
+# ignored advisories in deny.toml).
+hyper-rustls = { version = "0.27", optional = true, default-features = false, features = ["ring", "http1", "tls12"] }
+rustls = { version = "0.23", optional = true, default-features = false, features = ["ring", "std", "tls12", "logging"] }
+rustls-native-certs = { version = "0.8", optional = true }
+rustls-pki-types = { version = "1", optional = true, features = ["std"] }
+webpki-roots = { version = "1", optional = true }
+quick-xml = { version = "0.37", optional = true }
+sha1 = { version = "0.10", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread"] }
+zeroize = "1"
+tempfile = "3"
